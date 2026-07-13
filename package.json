@@ -1,0 +1,20 @@
+{
+  "name": "leave-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Annual leave & time-off tracker — QuickBooks-style accrual engine with Kosovo Labour Law (03/L-212) rules",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.0"
+  }
+}
