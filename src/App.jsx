@@ -164,7 +164,21 @@ export default function LeaveTracker() {
   const [expanded, setExpanded] = useState(null);
   const [tab, setTab] = useState("log");
   const [showForm, setShowForm] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+  const [pendingImport, setPendingImport] = useState(null);
   const saveTimer = useRef(null);
+
+  // Detect a sync link (#sync=...) opened on this device
+  useEffect(() => {
+    try {
+      const h = window.location.hash || "";
+      if (h.startsWith("#sync=")) {
+        const json = decodeURIComponent(escape(atob(h.slice(6))));
+        const d = JSON.parse(json);
+        if (d && d.employees && d.entries) setPendingImport(d);
+      }
+    } catch (e) {}
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -275,34 +289,107 @@ export default function LeaveTracker() {
   };
   const deleteEntry = (id) => setEntries((prev) => prev.filter((e) => e.id !== id));
 
+  // ----- save & sync link -----
+  const buildSyncLink = async () => {
+    try {
+      const json = JSON.stringify({ employees, entries, baseYear, exportedAt: new Date().toISOString() });
+      const data = btoa(unescape(encodeURIComponent(json)));
+      const url = window.location.origin + window.location.pathname + "#sync=" + data;
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(url);
+        copied = true;
+      } catch (e) {
+        window.prompt("Copy this sync link:", url);
+      }
+      setSyncMsg(copied ? "Sync link copied — open it on the other computer and click Import."
+                        : "Sync link ready — copy it from the popup.");
+      setTimeout(() => setSyncMsg(""), 6000);
+    } catch (e) {
+      setSyncMsg("Couldn't create the sync link.");
+      setTimeout(() => setSyncMsg(""), 4000);
+    }
+  };
+
+  const applyImport = () => {
+    if (!pendingImport) return;
+    setEmployees(pendingImport.employees.map((e) => ({ ...DEFAULT_EMPLOYEES[0], ...e })));
+    setEntries(pendingImport.entries);
+    if (pendingImport.baseYear) setBaseYear(pendingImport.baseYear);
+    setPendingImport(null);
+    try { history.replaceState(null, "", window.location.pathname); } catch (e) {}
+  };
+  const dismissImport = () => {
+    setPendingImport(null);
+    try { history.replaceState(null, "", window.location.pathname); } catch (e) {}
+  };
+
   const years = Array.from(new Set([thisYear - 1, thisYear, thisYear + 1, ...entries.map((e) => e.year)])).sort();
 
   return (
-    <div style={{ background: PAPER, minHeight: "100vh", color: INK, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Ubuntu, sans-serif" }}>
-      <div className="max-w-4xl mx-auto px-4 py-8">
+    <div style={{ background: PAPER, minHeight: "100vh", color: INK, position: "relative", overflow: "hidden", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Ubuntu, sans-serif" }}>
+      {/* Stripe-style gradient backdrop */}
+      <div aria-hidden style={{ position: "absolute", top: -120, left: "-10%", right: "-10%", height: 380,
+        background: "linear-gradient(100deg, #635BFF 0%, #7A73FF 30%, #80E9FF 65%, #FF80B5 100%)",
+        transform: "skewY(-5deg)", transformOrigin: "top left" }} />
+      <div aria-hidden style={{ position: "absolute", top: 200, right: -140, width: 380, height: 380, borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(128,233,255,0.35), transparent 70%)" }} />
+      <div aria-hidden style={{ position: "absolute", top: 520, left: -160, width: 420, height: 420, borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(255,128,181,0.25), transparent 70%)" }} />
+      <div aria-hidden style={{ position: "absolute", bottom: -100, right: "10%", width: 360, height: 360, borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(99,91,255,0.18), transparent 70%)" }} />
 
-        <div style={{ height: 4, borderRadius: 4, background: "linear-gradient(90deg, #635BFF 0%, #80E9FF 50%, #FF80B5 100%)" }} />
-        <div className="flex flex-wrap items-end justify-between gap-4 pb-5 pt-6">
+      <div className="max-w-4xl mx-auto px-4 py-8" style={{ position: "relative" }}>
+
+        <div className="flex flex-wrap items-end justify-between gap-4 pb-6 pt-2">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-widest" style={{ color: BLURPLE }}>Team time off ledger · Kosovo</div>
-            <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: 4, color: INK }}>
+            <div className="text-xs font-semibold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.85)" }}>Team time off ledger · Kosovo</div>
+            <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: 4, color: "white", textShadow: "0 1px 3px rgba(10,37,64,0.25)" }}>
               Time Off {year}
             </h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <select value={year} onChange={(e) => setYear(Number(e.target.value))}
-              className="px-3 py-2 rounded text-sm" style={{ border: `1px solid ${RULE}`, background: "white", color: INK }}>
+              className="px-3 py-2 rounded-md text-sm font-medium" style={{ border: "1px solid rgba(255,255,255,0.4)", background: "white", color: INK, boxShadow: BTN_SHADOW }}>
               {years.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
+            <button onClick={buildSyncLink}
+              className="px-4 py-2 rounded-md text-sm font-semibold"
+              style={{ background: "rgba(255,255,255,0.18)", color: "white", border: "1px solid rgba(255,255,255,0.45)" }}>
+              Save &amp; sync link
+            </button>
             <button onClick={() => setShowForm(true)}
               className="px-4 py-2 rounded-md text-sm font-semibold"
-              style={{ background: BLURPLE, color: "white", boxShadow: BTN_SHADOW }}>
+              style={{ background: "white", color: BLURPLE, boxShadow: BTN_SHADOW }}>
               Log time off
             </button>
           </div>
         </div>
 
-        <div className="pb-3 text-xs" style={{ color: INK_SOFT }}>
+        {syncMsg && (
+          <div className="mb-3 px-3 py-2 rounded-md text-sm font-medium"
+            style={{ background: "white", color: "#0E6245", boxShadow: CARD_SHADOW }}>
+            {syncMsg}
+          </div>
+        )}
+        {pendingImport && (
+          <div className="mb-3 px-4 py-3 rounded-md text-sm flex flex-wrap items-center gap-3"
+            style={{ background: "white", color: INK, boxShadow: CARD_SHADOW, border: `1px solid ${RULE}` }}>
+            <span>
+              This link contains a data snapshot ({pendingImport.employees?.length || 0} employees,{" "}
+              {pendingImport.entries?.length || 0} bookings{pendingImport.exportedAt ? `, saved ${fmtDate(pendingImport.exportedAt.slice(0, 10))}` : ""}).
+              Importing replaces the data on this device.
+            </span>
+            <button onClick={applyImport} className="px-3 py-1.5 rounded-md text-sm font-semibold"
+              style={{ background: BLURPLE, color: "white", boxShadow: BTN_SHADOW }}>Import</button>
+            <button onClick={dismissImport} className="px-3 py-1.5 rounded-md text-sm"
+              style={{ border: `1px solid ${RULE}` }}>Not now</button>
+          </div>
+        )}
+
+        <Dashboard employees={employees} entries={entries} balance={balance} year={year} />
+
+        <div className="pt-4 pb-3 text-xs" style={{ color: INK_SOFT }}>
           Applies Labour Law No. 03/L-212 rules: 20-working-day minimum (30 for harmful conditions), +1 day per 5 years of experience,
           +2 days for mothers with children under 3 / single parents / persons with disabilities, the 6-month first-employment rule (Art. 35),
           carryover usable until 30 June of the next year, and fixed public holidays excluded from day counts.
@@ -394,6 +481,102 @@ export default function LeaveTracker() {
       {showForm && (
         <LeaveForm employees={employees} balance={balance} onSave={addEntry} onClose={() => setShowForm(false)} />
       )}
+    </div>
+  );
+}
+
+// ---------- dashboard ----------
+function Dashboard({ employees, entries, balance, year }) {
+  const today = new Date();
+  const todayISO = today.toISOString().slice(0, 10);
+  const in30 = new Date(today); in30.setDate(in30.getDate() + 30);
+  const in30ISO = in30.toISOString().slice(0, 10);
+
+  let availDays = 0, expiringHrs = 0;
+  const usage = []; // per-employee annual usage for bars
+  employees.forEach((emp) => {
+    let empAvail = 0, empUsed = 0, empGross = 0;
+    ANNUAL_KEYS.forEach((k) => {
+      const b = balance(emp, k);
+      if (b && !b.unlimited) {
+        empAvail += b.available; empUsed += b.used; empGross += b.gross;
+        if (b.carryDeadline) expiringHrs += b.carry;
+      }
+    });
+    availDays += empAvail / (emp.hoursPerDay || 8);
+    usage.push({ name: emp.name, used: empUsed, gross: empGross, perDay: emp.hoursPerDay || 8 });
+  });
+
+  const bookedDays = entries.filter((e) => e.year === year).reduce((s, e) => {
+    const emp = employees.find((x) => x.id === e.empId);
+    return s + e.hours / (emp?.hoursPerDay || 8);
+  }, 0);
+
+  const awayNow = employees.filter((emp) =>
+    entries.some((e) => e.empId === emp.id && e.start && e.end && e.start <= in30ISO && e.end >= todayISO)).length;
+
+  const upcoming = entries
+    .filter((e) => e.start && e.start >= todayISO)
+    .sort((a, b) => a.start.localeCompare(b.start))
+    .slice(0, 4);
+
+  const rnd = (n) => Math.round(n * 10) / 10;
+  const stats = [
+    { label: "Team days available", value: rnd(availDays) + "d", accent: "#635BFF" },
+    { label: `Booked in ${year}`, value: rnd(bookedDays) + "d", accent: "#00D4FF" },
+    { label: "Away in next 30 days", value: awayNow, accent: "#0E6245" },
+    { label: "Hours expiring 30 Jun", value: hrs(expiringHrs), accent: expiringHrs > 0 ? "#983705" : "#697386" },
+  ];
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-lg p-3" style={{ background: "white", boxShadow: CARD_SHADOW, borderTop: `3px solid ${s.accent}` }}>
+            <div className="text-xs" style={{ color: INK_SOFT }}>{s.label}</div>
+            <div className="text-xl font-bold mt-1" style={{ color: INK, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-3 mt-3">
+        <div className="rounded-lg p-4" style={{ background: "white", boxShadow: CARD_SHADOW }}>
+          <div className="text-sm font-semibold mb-3" style={{ color: INK }}>Annual leave usage</div>
+          {usage.map((u) => {
+            const pct = u.gross > 0 ? Math.min(100, (u.used / u.gross) * 100) : 0;
+            return (
+              <div key={u.name} className="mb-2">
+                <div className="flex justify-between text-xs mb-1" style={{ color: INK_SOFT, fontVariantNumeric: "tabular-nums" }}>
+                  <span>{u.name}</span>
+                  <span>{asDays(u.used, u.perDay)} / {asDays(u.gross, u.perDay)}</span>
+                </div>
+                <div className="rounded-full" style={{ height: 6, background: "#EBEEF1" }}>
+                  <div className="rounded-full" style={{ height: 6, width: pct + "%", background: pct >= 90 ? "#FF80B5" : "linear-gradient(90deg, #635BFF, #80E9FF)" }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="rounded-lg p-4" style={{ background: "white", boxShadow: CARD_SHADOW }}>
+          <div className="text-sm font-semibold mb-3" style={{ color: INK }}>Upcoming time off</div>
+          {upcoming.length === 0 ? (
+            <div className="text-sm" style={{ color: INK_SOFT }}>Nothing scheduled from today onward.</div>
+          ) : (
+            upcoming.map((e) => {
+              const emp = employees.find((x) => x.id === e.empId);
+              return (
+                <div key={e.id} className="flex justify-between items-center text-sm py-1.5" style={{ borderBottom: `1px dashed ${RULE}` }}>
+                  <span style={{ color: INK }}>{emp?.name || "—"} <span style={{ color: INK_SOFT }}>· {typeLabel(e.type)}</span></span>
+                  <span style={{ color: INK_SOFT, fontVariantNumeric: "tabular-nums" }}>
+                    {fmtDate(e.start)}{e.end && e.end !== e.start ? ` – ${fmtDate(e.end)}` : ""}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
     </div>
   );
 }
