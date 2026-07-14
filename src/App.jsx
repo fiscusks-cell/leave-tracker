@@ -53,7 +53,7 @@ const defaultPolicy = (enabled) => ({
   openingBalance: 0,
 });
 
-const DEFAULT_EMPLOYEES = [1, 2, 3, 4, 5, 6].map((i) => ({
+const DEFAULT_EMPLOYEES = [1, 2, 3, 4].map((i) => ({
   id: "emp" + i,
   name: "Employee " + i,
   hireDate: "",
@@ -260,6 +260,28 @@ export default function LeaveTracker() {
 
   const updateEmployee = (id, patch) =>
     setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+
+  const addEmployee = () => {
+    const id = "emp" + Date.now();
+    setEmployees((prev) => [...prev, {
+      ...DEFAULT_EMPLOYEES[0],
+      id,
+      name: "New employee",
+      policies: {
+        pto: defaultPolicy(false),
+        vacation: defaultPolicy(true),
+        sick: { ...defaultPolicy(true), hoursPerYear: 160, carryover: "none" },
+      },
+    }]);
+    setExpanded(id);
+    setTab("policies");
+  };
+
+  const removeEmployee = (id) => {
+    setEmployees((prev) => prev.filter((e) => e.id !== id));
+    setEntries((prev) => prev.filter((e) => e.empId !== id));
+    setExpanded(null);
+  };
   const updatePolicy = (empId, typeKey, patch) =>
     setEmployees((prev) => prev.map((e) => {
       if (e.id !== empId) return e;
@@ -463,7 +485,7 @@ export default function LeaveTracker() {
                     {tab === "log" ? (
                       <LogView emp={emp} empEntries={empEntries} balance={balance} deleteEntry={deleteEntry} year={year} />
                     ) : (
-                      <PolicyView emp={emp} updateEmployee={updateEmployee} updatePolicy={updatePolicy} applyKosovo={applyKosovo} />
+                      <PolicyView emp={emp} updateEmployee={updateEmployee} updatePolicy={updatePolicy} applyKosovo={applyKosovo} removeEmployee={removeEmployee} />
                     )}
                   </div>
                 )}
@@ -471,6 +493,12 @@ export default function LeaveTracker() {
             );
           })}
         </div>
+
+        <button onClick={addEmployee}
+          className="w-full mt-3 py-3 rounded-lg text-sm font-semibold"
+          style={{ border: `2px dashed ${RULE}`, color: BLURPLE, background: "rgba(255,255,255,0.7)" }}>
+          + Add employee
+        </button>
 
         <div className="pt-4 text-xs" style={{ color: INK_SOFT }}>
           This tracker is a working tool, not legal advice — confirm edge cases with the Labour Inspectorate or your legal advisor.
@@ -653,7 +681,8 @@ function LogView({ emp, empEntries, balance, deleteEntry, year }) {
 }
 
 // ---------- policy & Kosovo rules editor ----------
-function PolicyView({ emp, updateEmployee, updatePolicy, applyKosovo }) {
+function PolicyView({ emp, updateEmployee, updatePolicy, applyKosovo, removeEmployee }) {
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const inp = { border: `1px solid ${RULE}`, background: "white" };
   const lbl = "block text-xs font-semibold uppercase tracking-wide";
   const ent = kosovoEntitlementDays(emp);
@@ -822,6 +851,32 @@ function PolicyView({ emp, updateEmployee, updatePolicy, applyKosovo }) {
       <div className="text-xs mt-3" style={{ color: INK_SOFT }}>
         Holiday pay and unpaid time off are always loggable and never reduce paid balances. Under the Labour Law,
         annual leave cannot be waived, and unused leave is compensated in money only on termination.
+      </div>
+
+      <div className="mt-4 pt-3 flex items-center gap-3" style={{ borderTop: `1px solid ${RULE}` }}>
+        {!confirmRemove ? (
+          <button onClick={() => setConfirmRemove(true)}
+            className="px-3 py-1.5 rounded-md text-xs font-semibold"
+            style={{ border: `1px solid ${RULE}`, color: OVER, background: "white" }}>
+            Remove employee
+          </button>
+        ) : (
+          <>
+            <span className="text-xs" style={{ color: OVER }}>
+              This permanently deletes {emp.name} and all their bookings.
+            </span>
+            <button onClick={() => removeEmployee(emp.id)}
+              className="px-3 py-1.5 rounded-md text-xs font-semibold"
+              style={{ background: OVER, color: "white", boxShadow: BTN_SHADOW }}>
+              Yes, remove
+            </button>
+            <button onClick={() => setConfirmRemove(false)}
+              className="px-3 py-1.5 rounded-md text-xs"
+              style={{ border: `1px solid ${RULE}` }}>
+              Cancel
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
