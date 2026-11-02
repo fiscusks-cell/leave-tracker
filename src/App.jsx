@@ -370,10 +370,21 @@ export default function LeaveTracker() {
 
   return (
     <div style={{ background: PAPER, minHeight: "100vh", color: INK, position: "relative", overflow: "hidden", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Ubuntu, sans-serif" }}>
-      {/* Stripe-style gradient backdrop */}
-      <div aria-hidden style={{ position: "absolute", top: -120, left: "-10%", right: "-10%", height: 430,
+      <style>{ANIM_CSS}</style>
+      {/* Stripe-style gradient backdrop with slowly drifting colour blobs */}
+      <div aria-hidden style={{ position: "absolute", top: -120, left: "-10%", right: "-10%", height: 430, overflow: "hidden",
         background: "linear-gradient(100deg, #635BFF 0%, #7A73FF 30%, #80E9FF 65%, #FF80B5 100%)",
-        transform: "skewY(-5deg)", transformOrigin: "top left" }} />
+        transform: "skewY(-5deg)", transformOrigin: "top left" }}>
+        <div className="lt-drift" style={{ position: "absolute", width: 700, height: 700, left: "2%", top: -160, borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(255,128,181,0.55), rgba(255,128,181,0) 65%)", mixBlendMode: "overlay",
+          animation: "lt-drift-a 16s ease-in-out infinite alternate" }} />
+        <div className="lt-drift" style={{ position: "absolute", width: 760, height: 760, right: "4%", top: -220, borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(34,53,229,0.45), rgba(34,53,229,0) 65%)", mixBlendMode: "overlay",
+          animation: "lt-drift-b 21s ease-in-out infinite alternate" }} />
+        <div className="lt-drift" style={{ position: "absolute", width: 560, height: 560, left: "40%", top: 40, borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(128,233,255,0.6), rgba(128,233,255,0) 65%)", mixBlendMode: "soft-light",
+          animation: "lt-drift-c 18s ease-in-out infinite alternate" }} />
+      </div>
       <div aria-hidden style={{ position: "absolute", top: 200, right: -140, width: 380, height: 380, borderRadius: "50%",
         background: "radial-gradient(circle, rgba(128,233,255,0.35), transparent 70%)" }} />
       <div aria-hidden style={{ position: "absolute", top: 520, left: -160, width: 420, height: 420, borderRadius: "50%",
@@ -598,9 +609,9 @@ function niceStep(max) {
   return steps.find((s) => s * 4 >= max) || 1000;
 }
 
-function Panel({ title, sub, right, children, className = "" }) {
+function Panel({ title, sub, right, children, className = "", style = {}, panelRef }) {
   return (
-    <div className={"rounded-lg p-4 " + className} style={{ background: "white", boxShadow: CARD_SHADOW, border: `1px solid ${RULE}` }}>
+    <div ref={panelRef} className={"rounded-lg p-4 " + className} style={{ background: "white", boxShadow: CARD_SHADOW, border: `1px solid ${RULE}`, ...style }}>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div>
           <div className="text-sm font-semibold" style={{ color: INK }}>{title}</div>
@@ -613,11 +624,14 @@ function Panel({ title, sub, right, children, className = "" }) {
   );
 }
 
-function Legend({ items }) {
+function Legend({ items, active, onHover }) {
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: INK_SOFT }}>
       {items.map((it) => (
-        <span key={it.label} className="inline-flex items-center gap-1.5">
+        <span key={it.label} className="inline-flex items-center gap-1.5"
+          style={{ cursor: onHover && it.key ? "pointer" : "default", opacity: active && it.key && active !== it.key ? 0.45 : 1, transition: "opacity 200ms" }}
+          onMouseEnter={() => onHover && it.key && onHover(it.key)}
+          onMouseLeave={() => onHover && onHover(null)}>
           <span style={{ width: 10, height: 10, borderRadius: 3, background: it.color, border: it.border || "none", display: "inline-block" }} />
           {it.label}
         </span>
@@ -647,6 +661,56 @@ function Tooltip({ tip }) {
   );
 }
 
+// ---------- animation (mirrors the t4appnweb.com ledger → dashboard demo) ----------
+// Bars pop up with the same spring curve and brightness flash, KPIs count up and
+// bounce, glowing data packets fly into the chart. Plays when the dashboard
+// scrolls into view; prefers-reduced-motion shows the final state instantly.
+const ANIM_CSS = `
+@keyframes lt-grow { 0% { transform: scaleY(0); filter: brightness(1.6); } 100% { transform: scaleY(1); filter: brightness(1); } }
+@keyframes lt-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes lt-pop  { 0% { transform: scale(0.3); opacity: 0; filter: brightness(1.6); } 100% { transform: scale(1); opacity: 1; filter: brightness(1); } }
+@keyframes lt-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes lt-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lt-kflash { 0% { transform: translateY(-4px) scale(1.04); } 100% { transform: none; } }
+@keyframes lt-hit { 0% { box-shadow: 0 0 0 0 rgba(99,91,255,0.45), ${CARD_SHADOW}; } 100% { box-shadow: 0 0 0 12px rgba(99,91,255,0), ${CARD_SHADOW}; } }
+@keyframes lt-drift-a { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(18vw, 40px) scale(1.15); } }
+@keyframes lt-drift-b { 0% { transform: translate(0, 0) scale(1.1); } 100% { transform: translate(-22vw, 30px) scale(0.9); } }
+@keyframes lt-drift-c { 0% { transform: translate(0, 0); } 100% { transform: translate(10vw, -30px); } }
+@media (prefers-reduced-motion: reduce) { .lt-a, .lt-drift { animation: none !important; } }
+`;
+const SPRING = "cubic-bezier(.34, 1.56, .64, 1)";
+const EASE_OUT = "cubic-bezier(.22, 1, .36, 1)";
+const prefersReduced = () =>
+  typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const easeInOut = (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+
+// Counts from 0 to `to` after `delay` ms (ease-out cubic), restarting whenever `run` changes
+function CountUp({ to, fmt, run, delay = 0, ms = 1100 }) {
+  const [v, setV] = useState(run && !prefersReduced() ? 0 : to);
+  const target = useRef(to);
+  target.current = to;
+  useEffect(() => {
+    if (!run || prefersReduced()) { setV(to); return; }
+    let raf, t0 = null;
+    setV(0);
+    const step = (now) => {
+      if (t0 === null) t0 = now + delay;
+      const p = Math.min(1, Math.max(0, (now - t0) / ms));
+      setV(target.current * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [run]); // eslint-disable-line react-hooks/exhaustive-deps
+  const prevTo = useRef(to);
+  useEffect(() => {           // live data change after the intro: jump to the new value
+    if (prevTo.current === to) return;
+    prevTo.current = to;
+    if (run) setV(to);
+  }, [to]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <>{fmt(v)}</>;
+}
+
 function Dashboard({ employees, entries, balance, year }) {
   const today = new Date();
   const todayISO = isoDate(today);
@@ -658,19 +722,45 @@ function Dashboard({ employees, entries, balance, year }) {
   const [tip, setTip] = useState(null);
   const showTip = (e, title, rows) => setTip({ x: e.clientX, y: e.clientY, title, rows });
   const hideTip = () => setTip(null);
+  const [hoverType, setHoverType] = useState(null);
+  const [hoverMonth, setHoverMonth] = useState(null);
+
+  // ---- playback: run = 0 until the dashboard is 25% visible; each increment replays the intro
+  const [run, setRun] = useState(0);
+  const rootRef = useRef(null), fxRef = useRef(null), srcRef = useRef(null), chartRef = useRef(null);
+  const colRefs = useRef([]);
+  const visibleRef = useRef(false);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    if (!("IntersectionObserver" in window)) { visibleRef.current = true; setRun(1); return; }
+    const io = new IntersectionObserver((ents) => {
+      visibleRef.current = ents[0].isIntersecting;
+      if (ents[0].isIntersecting) setRun((r) => (r === 0 ? 1 : r));
+    }, { threshold: 0.25 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const firstYear = useRef(true);
+  useEffect(() => {
+    if (firstYear.current) { firstYear.current = false; return; }
+    if (visibleRef.current) setRun((r) => r + 1);
+  }, [year]);
+  const replay = () => setRun((r) => r + 1);
 
   const [cal, setCal] = useState({ y: year, m: year === thisYear ? today.getMonth() : 0 });
+  const [calNav, setCalNav] = useState(0);
   useEffect(() => { setCal({ y: year, m: year === thisYear ? new Date().getMonth() : 0 }); }, [year]);
-  const shiftMonth = (delta) => setCal(({ y, m }) => {
-    const d = new Date(y, m + delta, 1);
-    return { y: d.getFullYear(), m: d.getMonth() };
-  });
+  const shiftMonth = (delta) => {
+    setCalNav((n) => n + 1);
+    setCal(({ y, m }) => { const d = new Date(y, m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; });
+  };
 
   // ---- per-day leave map + monthly series for the selected year ----
-  const dayMap = {};                                  // empId -> iso -> typeKey
-  const monthly = MONTHS.map(() => ({}));              // [month]{type: days}
+  const dayMap = {};
+  const monthly = MONTHS.map(() => ({}));
   const typeTotals = {};
-  const annualByEmp = {};                              // empId -> [iso] (selected year)
+  const annualByEmp = {};
   entries.forEach((en) => {
     if (!en.start) return;
     entryDays(en, perDayOf(en.empId)).forEach(({ iso, days }) => {
@@ -688,7 +778,81 @@ function Dashboard({ employees, entries, balance, year }) {
   const peakMonth = monthTotals.indexOf(Math.max(...monthTotals));
   const step = niceStep(Math.max(...monthTotals, 0.01));
   const yMax = step * 4;
-  const CH = 180; // chart plot height in px
+  const CH = 180;
+
+  // ---- animation timeline (ms from the start of a run) ----
+  const START = 350, GAP = 90;
+  const plan = [];      // one packet per (month, leave type) with data
+  const arrival = {};   // month -> ms when its bar pops up
+  MONTHS.forEach((_, m) => {
+    const segs = TYPE_ORDER.filter((k) => (monthly[m][k] || 0) > 0);
+    if (!segs.length) return;
+    const i = Object.keys(arrival).length;
+    const launch = START + i * GAP;
+    const dur = 700 + (i % 3) * 70;
+    arrival[m] = launch + dur;
+    let acc = 0;
+    segs.forEach((k, j) => {
+      acc += monthly[m][k];
+      plan.push({ m, k, i: plan.length, launch: launch + j * 40, dur: dur - j * 40, barPx: (acc / yMax) * CH });
+    });
+  });
+  const lastArrival = Math.max(START, ...Object.values(arrival));
+  const T_AFTER = lastArrival + 150;
+  const anim = (name, delay, dur, easing = EASE_OUT) => run
+    ? { animation: `${name} ${dur}ms ${easing} ${Math.round(delay)}ms both` }
+    : { animation: `${name} 1ms linear 0ms both`, animationPlayState: "paused" };
+
+  // ---- data packets (canvas overlay) ----
+  useEffect(() => {
+    if (!run || prefersReduced() || !plan.length) return;
+    const cv = fxRef.current, root = rootRef.current, src = srcRef.current;
+    if (!cv || !root || !src) return;
+    const rr = root.getBoundingClientRect();
+    const chartBottom = chartRef.current ? chartRef.current.getBoundingClientRect().bottom - rr.top + 30 : rr.height;
+    const h = Math.min(rr.height, chartBottom);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = rr.width * dpr; cv.height = h * dpr;
+    cv.style.width = rr.width + "px"; cv.style.height = h + "px";
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const sr = src.getBoundingClientRect();
+    const sx = sr.left - rr.left + sr.width / 2, sy = sr.top - rr.top + sr.height / 2;
+    const packets = plan.map((p) => {
+      const col = colRefs.current[p.m];
+      if (!col) return null;
+      const cr = col.getBoundingClientRect();
+      const tx = cr.left - rr.left + cr.width / 2, ty = cr.bottom - rr.top - p.barPx;
+      return { ...p, tx, ty, cx: (sx + tx) / 2, cy: Math.min(sy, ty) - 70 - (p.i % 4) * 22, color: TYPE_COLORS[p.k], trail: [] };
+    }).filter(Boolean);
+    const t0 = performance.now();
+    let raf;
+    const loop = (now) => {
+      ctx.clearRect(0, 0, rr.width, h);
+      let alive = 0;
+      packets.forEach((p) => {
+        const k = (now - t0 - p.launch) / p.dur;
+        if (k < 0) { alive++; return; }
+        if (k > 1) return;
+        alive++;
+        const e = easeInOut(k), u = 1 - e;
+        const x = u * u * sx + 2 * u * e * p.cx + e * e * p.tx;
+        const y = u * u * sy + 2 * u * e * p.cy + e * e * p.ty;
+        p.trail.push([x, y]); if (p.trail.length > 14) p.trail.shift();
+        ctx.fillStyle = p.color;
+        p.trail.forEach(([tx, ty], i) => {
+          const a = (i + 1) / p.trail.length;
+          ctx.globalAlpha = a * 0.5;
+          ctx.beginPath(); ctx.arc(tx, ty, 1 + a * 2, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.globalAlpha = 1; ctx.shadowColor = p.color; ctx.shadowBlur = 14;
+        ctx.beginPath(); ctx.arc(x, y, 3.2, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+      });
+      if (alive) raf = requestAnimationFrame(loop); else ctx.clearRect(0, 0, rr.width, h);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(raf); ctx.clearRect(0, 0, rr.width, h); };
+  }, [run]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- balances, usage & compliance ----
   let availDays = 0, expiringDays = 0;
@@ -709,7 +873,7 @@ function Dashboard({ employees, entries, balance, year }) {
     });
     availDays += empAvail / pd;
     expiringDays += empCarry / pd;
-    usage.push({ name: emp.name, used: empUsed, gross: empGross, perDay: pd });
+    usage.push({ id: emp.id, name: emp.name, used: empUsed, gross: empGross, perDay: pd });
 
     const elig = eligibilityDate(emp);
     if (elig && isoDate(elig) > todayISO)
@@ -723,10 +887,9 @@ function Dashboard({ employees, entries, balance, year }) {
     if (empExpired > 0)
       alerts.push({ level: "info", tag: "Expired", text: `${emp.name}: ${fmtDays(empExpired / pd)} carried leave expired on 30 Jun ${year}` });
     if (secondHalf && hasAnnual && !(elig && isoDate(elig) > todayISO)) {
-      // longest run of consecutive working days of annual leave this year
       const days = Array.from(new Set(annualByEmp[emp.id] || [])).sort();
-      let best = 0, run = 0, prev = null;
-      days.forEach((d) => { run = prev && nextWorkingDay(prev) === d ? run + 1 : 1; best = Math.max(best, run); prev = d; });
+      let best = 0, runLen = 0, prev = null;
+      days.forEach((d) => { runLen = prev && nextWorkingDay(prev) === d ? runLen + 1 : 1; best = Math.max(best, runLen); prev = d; });
       if (best < 10)
         alerts.push({ level: "info", tag: "Reminder", text: `${emp.name}: no 10-day continuous annual leave block yet this year` });
     }
@@ -747,14 +910,15 @@ function Dashboard({ employees, entries, balance, year }) {
     .sort((a, b) => a.start.localeCompare(b.start))
     .slice(0, 6);
 
+  const intFmt = (v) => String(Math.round(v));
   const stats = [
-    { label: "Annual leave available", value: fmtDays(availDays), sub: `across ${employees.length} employees`, accent: BLURPLE },
-    { label: `Booked in ${year}`, value: fmtDays(bookedDays), sub: "all leave types", accent: "#0A8FAE" },
-    { label: "On leave today", value: onLeaveToday.length,
+    { label: "Annual leave available", to: availDays, fmt: fmtDays, sub: `across ${employees.length} employees`, accent: BLURPLE },
+    { label: `Booked in ${year}`, to: bookedDays, fmt: fmtDays, sub: "all leave types", accent: "#0A8FAE", src: true },
+    { label: "On leave today", to: onLeaveToday.length, fmt: intFmt,
       sub: onLeaveToday.length ? onLeaveToday.map((e) => e.name).slice(0, 2).join(", ") + (onLeaveToday.length > 2 ? "…" : "") : "everyone is in",
       accent: "#E5487F" },
-    { label: "Away in next 30 days", value: awayNext30, sub: "employees with booked leave", accent: "#1F8A4C" },
-    { label: "Expiring 30 June", value: fmtDays(expiringDays), sub: "carried-over annual leave", accent: expiringDays > 0 ? "#D98E04" : "#C0C8D2" },
+    { label: "Away in next 30 days", to: awayNext30, fmt: intFmt, sub: "employees with booked leave", accent: "#1F8A4C" },
+    { label: "Expiring 30 June", to: expiringDays, fmt: fmtDays, sub: "carried-over annual leave", accent: expiringDays > 0 ? "#D98E04" : "#C0C8D2" },
   ];
 
   // ---- calendar month ----
@@ -765,28 +929,42 @@ function Dashboard({ employees, entries, balance, year }) {
     return { iso, n: i + 1, wd: d.getDay(), weekend: d.getDay() === 0 || d.getDay() === 6, holiday: isFixedHoliday(iso) };
   });
   const usedTypes = TYPE_ORDER.filter((k) => (typeTotals[k] || 0) > 0);
+  const calBase = calNav ? 0 : T_AFTER + 250;   // intro: after the chart; month nav: straight away
+  const dimType = (k) => (hoverType && hoverType !== k ? 0.2 : 1);
 
   return (
-    <div className="space-y-3">
+    <div ref={rootRef} className="space-y-3" style={{ position: "relative" }}>
+      <canvas ref={fxRef} aria-hidden="true" style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none", zIndex: 5 }} />
       <Tooltip tip={tip} />
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        {stats.map((s) => (
-          <div key={s.label} className="rounded-lg p-4" style={{ background: "white", boxShadow: CARD_SHADOW, borderTop: `3px solid ${s.accent}` }}>
-            <div className="text-xs" style={{ color: INK_SOFT }}>{s.label}</div>
-            <div className="text-2xl font-semibold mt-1" style={{ color: INK, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}>{s.value}</div>
-            <div className="text-xs mt-0.5 truncate" style={{ color: INK_SOFT }}>{s.sub}</div>
-          </div>
-        ))}
+        {stats.map((s, i) => {
+          const countMs = s.src ? Math.max(900, lastArrival - 150) : 1100;
+          return (
+            <div key={`${s.label}-${run}`} className="lt-a rounded-lg p-4"
+              style={{ background: "white", boxShadow: CARD_SHADOW, borderTop: `3px solid ${s.accent}`, ...anim("lt-rise", i * 70, 500) }}>
+              <div className="text-xs" style={{ color: INK_SOFT }}>{s.label}</div>
+              <div className="lt-a text-2xl font-semibold mt-1" ref={s.src ? srcRef : undefined}
+                style={{ color: INK, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em", display: "inline-block", transformOrigin: "left center",
+                  ...anim("lt-kflash", 150 + i * 70 + countMs, 900, "ease-out") }}>
+                <CountUp to={s.to} fmt={s.fmt} run={run} delay={150 + i * 70} ms={countMs} />
+              </div>
+              <div className="text-xs mt-0.5 truncate" style={{ color: INK_SOFT }}>{s.sub}</div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Monthly chart + type breakdown */}
       <div className="grid xl:grid-cols-3 gap-3">
-        <Panel className="xl:col-span-2" title={`Time off by month · ${year}`} sub="Working days booked, stacked by leave type"
-          right={<Legend items={TYPE_ORDER.map((k) => ({ label: typeLabel(k), color: TYPE_COLORS[k] }))} />}>
+        <Panel panelRef={chartRef} className="xl:col-span-2 lt-a" title={`Time off by month · ${year}`}
+          style={run && plan.length ? { animation: `lt-hit 900ms ease-out ${lastArrival}ms both` } : {}}
+          sub={<span>Working days booked, stacked by leave type ·{" "}
+            <button onClick={replay} className="underline font-medium" style={{ color: BLURPLE }}>↻ Replay</button></span>}
+          right={<Legend active={hoverType} onHover={setHoverType}
+            items={TYPE_ORDER.map((k) => ({ key: k, label: typeLabel(k), color: TYPE_COLORS[k] }))} />}>
           <div className="flex" style={{ height: CH + 22 }}>
-            {/* y axis */}
             <div className="relative shrink-0" style={{ width: 34, height: CH + 22 }}>
               {[0, 1, 2, 3, 4].map((i) => (
                 <div key={i} className="absolute right-2 text-xs" style={{ bottom: 22 + (i / 4) * CH - 7, color: INK_SOFT, fontVariantNumeric: "tabular-nums" }}>
@@ -794,7 +972,6 @@ function Dashboard({ employees, entries, balance, year }) {
                 </div>
               ))}
             </div>
-            {/* plot */}
             <div className="relative flex-1">
               {[0, 1, 2, 3, 4].map((i) => (
                 <div key={i} className="absolute left-0 right-0" style={{ bottom: 22 + (i / 4) * CH, height: 1, background: i === 0 ? "#C0C8D2" : RULE }} />
@@ -808,26 +985,32 @@ function Dashboard({ employees, entries, balance, year }) {
                 {MONTHS.map((mLabel, m) => {
                   const segs = TYPE_ORDER.filter((k) => (monthly[m][k] || 0) > 0);
                   const rows = segs.map((k) => ({ label: typeLabel(k), color: TYPE_COLORS[k], value: fmtDays(monthly[m][k]) }));
+                  const isCur = m === today.getMonth() && year === thisYear;
                   return (
                     <div key={mLabel} className="flex-1 flex flex-col items-center justify-end"
-                      style={{ cursor: segs.length ? "default" : "auto" }}
+                      style={{ opacity: hoverMonth !== null && hoverMonth !== m ? 0.45 : 1, transition: "opacity 200ms" }}
+                      onMouseEnter={() => segs.length && setHoverMonth(m)}
                       onMouseMove={(e) => segs.length && showTip(e, `${MONTHS_LONG[m]} ${year} · ${fmtDays(monthTotals[m])}`, rows)}
-                      onMouseLeave={hideTip}>
-                      <div className="relative w-full flex flex-col-reverse items-center" style={{ height: CH, justifyContent: "flex-start" }}>
-                        {segs.map((k, i) => (
-                          <div key={k} style={{
-                            width: "min(24px, 70%)", height: Math.max(2, (monthly[m][k] / yMax) * CH),
-                            background: TYPE_COLORS[k],
-                            borderTop: i < segs.length - 1 ? "2px solid white" : "none",
-                            boxSizing: "border-box",
-                            borderRadius: i === segs.length - 1 ? "4px 4px 0 0" : 0,
-                          }} />
-                        ))}
+                      onMouseLeave={() => { hideTip(); setHoverMonth(null); }}>
+                      <div ref={(el) => { colRefs.current[m] = el; }} className="relative w-full flex flex-col items-center justify-end" style={{ height: CH }}>
                         {m === peakMonth && monthTotals[m] > 0 && (
-                          <div className="text-xs font-semibold mb-1" style={{ color: INK, fontVariantNumeric: "tabular-nums" }}>{fmtDays(monthTotals[m])}</div>
+                          <div key={`pk-${run}`} className="lt-a text-xs font-semibold mb-1"
+                            style={{ color: INK, fontVariantNumeric: "tabular-nums", ...anim("lt-fade", T_AFTER, 400) }}>{fmtDays(monthTotals[m])}</div>
                         )}
+                        <div key={`st-${run}`} className="lt-a w-full flex flex-col-reverse items-center"
+                          style={{ transformOrigin: "50% 100%", ...(segs.length ? anim("lt-grow", arrival[m] ?? 0, 650, SPRING) : {}) }}>
+                          {segs.map((k, i) => (
+                            <div key={k} style={{
+                              width: "min(24px, 70%)", height: Math.max(2, (monthly[m][k] / yMax) * CH),
+                              background: TYPE_COLORS[k], opacity: dimType(k),
+                              borderTop: i < segs.length - 1 ? "2px solid white" : "none", boxSizing: "border-box",
+                              borderRadius: i === segs.length - 1 ? "4px 4px 0 0" : 0,
+                              transition: "height 400ms cubic-bezier(.22,1,.36,1), opacity 200ms",
+                            }} />
+                          ))}
+                        </div>
                       </div>
-                      <div className="text-xs mt-1" style={{ color: m === today.getMonth() && year === thisYear ? INK : INK_SOFT, fontWeight: m === today.getMonth() && year === thisYear ? 600 : 400, height: 18 }}>
+                      <div className="text-xs mt-1" style={{ color: isCur ? INK : INK_SOFT, fontWeight: isCur ? 600 : 400, height: 18 }}>
                         <span className="hidden sm:inline">{mLabel}</span><span className="sm:hidden">{mLabel[0]}</span>
                       </div>
                     </div>
@@ -838,28 +1021,32 @@ function Dashboard({ employees, entries, balance, year }) {
           </div>
         </Panel>
 
-        <Panel title="Leave by type" sub={`Working days in ${year}`}>
+        <Panel title="Leave by type" sub={`Working days in ${year} · hover to highlight`}>
           <div className="space-y-3">
-            {TYPE_ORDER.map((k) => {
+            {TYPE_ORDER.map((k, i) => {
               const v = typeTotals[k] || 0;
               const pct = bookedDays > 0 ? (v / bookedDays) * 100 : 0;
               return (
-                <div key={k}>
+                <div key={k} style={{ opacity: hoverType && hoverType !== k ? 0.45 : 1, transition: "opacity 200ms", cursor: "default" }}
+                  onMouseEnter={() => setHoverType(k)} onMouseLeave={() => setHoverType(null)}>
                   <div className="flex items-center justify-between text-xs mb-1" style={{ fontVariantNumeric: "tabular-nums" }}>
                     <span className="inline-flex items-center gap-1.5" style={{ color: INK }}>
                       <span style={{ width: 8, height: 8, borderRadius: 2, background: TYPE_COLORS[k], display: "inline-block" }} />
                       {typeLabel(k)}
                     </span>
-                    <span style={{ color: INK_SOFT }}><strong style={{ color: INK }}>{fmtDays(v)}</strong> · {Math.round(pct)}%</span>
+                    <span style={{ color: INK_SOFT }}>
+                      <strong style={{ color: INK }}><CountUp to={v} fmt={fmtDays} run={run} delay={T_AFTER + i * 90} ms={700} /></strong> · {Math.round(pct)}%
+                    </span>
                   </div>
                   <div className="rounded-full" style={{ height: 8, background: "#EBEEF1" }}>
-                    <div style={{ height: 8, width: pct + "%", background: TYPE_COLORS[k], borderRadius: "0 4px 4px 0", minWidth: v > 0 ? 4 : 0 }} />
+                    <div key={`tf-${run}`} className="lt-a" style={{ height: 8, width: pct + "%", background: TYPE_COLORS[k], borderRadius: "0 4px 4px 0", minWidth: v > 0 ? 4 : 0,
+                      transformOrigin: "0 50%", transition: "width 400ms cubic-bezier(.22,1,.36,1)", ...anim("lt-fill", T_AFTER + i * 90, 700) }} />
                   </div>
                 </div>
               );
             })}
             <div className="pt-2 flex justify-between text-xs" style={{ borderTop: `1px solid ${RULE}`, color: INK_SOFT, fontVariantNumeric: "tabular-nums" }}>
-              <span>Total booked</span><strong style={{ color: INK }}>{fmtDays(bookedDays)}</strong>
+              <span>Total booked</span><strong style={{ color: INK }}><CountUp to={bookedDays} fmt={fmtDays} run={run} delay={T_AFTER} ms={900} /></strong>
             </div>
           </div>
         </Panel>
@@ -889,21 +1076,29 @@ function Dashboard({ employees, entries, balance, year }) {
               })}
             </div>
             <div className="mt-1 space-y-0.5">
-              {employees.map((emp) => (
+              {employees.map((emp, r) => (
                 <div key={emp.id} className="flex items-center" style={{ gap: 2 }}>
                   <div className="shrink-0 text-xs truncate pr-2" style={{ width: 150, color: INK }}>{emp.name}</div>
                   {calDays.map((d) => {
                     const t = dayMap[emp.id]?.[d.iso];
                     const isToday = d.iso === todayISO;
-                    const bg = t ? TYPE_COLORS[t] : d.holiday ? "#FDF1D6" : d.weekend ? "#EEF1F5" : "#F8FAFC";
+                    const bg = d.holiday ? "#FDF1D6" : d.weekend ? "#EEF1F5" : "#F8FAFC";
                     return (
-                      <div key={d.iso} className="flex-1"
+                      <div key={d.iso} className="flex-1 relative"
                         style={{ minWidth: 18, height: 22, borderRadius: 4, background: bg,
-                          boxShadow: isToday ? `inset 0 0 0 2px ${t ? "white" : BLURPLE}` : "none",
-                          outline: isToday && t ? `2px solid ${BLURPLE}` : "none" }}
+                          boxShadow: isToday && !t ? `inset 0 0 0 2px ${BLURPLE}` : "none" }}
                         onMouseMove={(e) => (t || d.holiday) && showTip(e, `${emp.name} · ${fmtDate(d.iso)}`,
                           t ? [{ label: typeLabel(t), color: TYPE_COLORS[t], value: "" }] : [{ label: "Public holiday", value: "" }])}
-                        onMouseLeave={hideTip} />
+                        onMouseLeave={hideTip}>
+                        {t && (
+                          <div className="absolute inset-0" style={{ opacity: dimType(t), transition: "opacity 200ms" }}>
+                            <div key={`${run}-${cal.y}-${cal.m}`} className="lt-a absolute inset-0"
+                              style={{ borderRadius: 4, background: TYPE_COLORS[t],
+                                outline: isToday ? `2px solid ${BLURPLE}` : "none", outlineOffset: 1,
+                                ...anim("lt-pop", calBase + (d.n - 1) * 18 + r * 30, 450, SPRING) }} />
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -912,8 +1107,8 @@ function Dashboard({ employees, entries, balance, year }) {
           </div>
         </div>
         <div className="mt-3">
-          <Legend items={[
-            ...(usedTypes.length ? usedTypes : ["vacation", "sick"]).map((k) => ({ label: typeLabel(k), color: TYPE_COLORS[k] })),
+          <Legend active={hoverType} onHover={setHoverType} items={[
+            ...(usedTypes.length ? usedTypes : ["vacation", "sick"]).map((k) => ({ key: k, label: typeLabel(k), color: TYPE_COLORS[k] })),
             { label: "Weekend", color: "#EEF1F5", border: `1px solid ${RULE}` },
             { label: "Public holiday", color: "#FDF1D6", border: `1px solid ${RULE}` },
           ]} />
@@ -923,16 +1118,18 @@ function Dashboard({ employees, entries, balance, year }) {
       {/* Usage, upcoming, compliance */}
       <div className="grid lg:grid-cols-3 gap-3">
         <Panel title="Annual leave usage" sub={`Used of available, ${year}`}>
-          {usage.map((u) => {
+          {usage.map((u, i) => {
             const pct = u.gross > 0 ? Math.min(100, (u.used / u.gross) * 100) : 0;
             return (
-              <div key={u.name} className="mb-2.5">
+              <div key={u.id} className="mb-2.5">
                 <div className="flex justify-between text-xs mb-1" style={{ color: INK_SOFT, fontVariantNumeric: "tabular-nums" }}>
                   <span style={{ color: INK }}>{u.name}</span>
                   <span>{asDays(u.used, u.perDay)} / {asDays(u.gross, u.perDay)}</span>
                 </div>
                 <div className="rounded-full" style={{ height: 6, background: "#EBEEF1" }}>
-                  <div className="rounded-full" style={{ height: 6, width: pct + "%", background: pct >= 90 ? "#E5487F" : "linear-gradient(90deg, #635BFF, #80E9FF)" }} />
+                  <div key={`u-${run}`} className="lt-a rounded-full" style={{ height: 6, width: pct + "%", transformOrigin: "0 50%",
+                    background: pct >= 90 ? "#E5487F" : "linear-gradient(90deg, #635BFF, #80E9FF)",
+                    transition: "width 400ms cubic-bezier(.22,1,.36,1)", ...anim("lt-fill", T_AFTER + 450 + i * 80, 800) }} />
                 </div>
               </div>
             );
@@ -943,8 +1140,9 @@ function Dashboard({ employees, entries, balance, year }) {
           {upcoming.length === 0 ? (
             <div className="text-sm" style={{ color: INK_SOFT }}>Nothing scheduled from today onward.</div>
           ) : (
-            upcoming.map((e) => (
-              <div key={e.id} className="flex justify-between items-center gap-3 text-sm py-1.5" style={{ borderBottom: `1px dashed ${RULE}` }}>
+            upcoming.map((e, i) => (
+              <div key={`${e.id}-${run}`} className="lt-a flex justify-between items-center gap-3 text-sm py-1.5"
+                style={{ borderBottom: `1px dashed ${RULE}`, ...anim("lt-rise", T_AFTER + 500 + i * 70, 450) }}>
                 <span className="inline-flex items-center gap-2 min-w-0" style={{ color: INK }}>
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: TYPE_COLORS[e.type] || "#C0C8D2", display: "inline-block", flexShrink: 0 }} />
                   <span className="truncate">{nameOf(e.empId)} <span style={{ color: INK_SOFT }}>· {typeLabel(e.type)}</span></span>
@@ -959,7 +1157,7 @@ function Dashboard({ employees, entries, balance, year }) {
 
         <Panel title="Compliance watch" sub="Kosovo Labour Law checks across the team">
           {alerts.length === 0 ? (
-            <div className="flex items-center gap-2 text-sm" style={{ color: "#0E6245" }}>
+            <div key={`ok-${run}`} className="lt-a flex items-center gap-2 text-sm" style={{ color: "#0E6245", ...anim("lt-rise", T_AFTER + 600, 450) }}>
               <span className="inline-flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 18, height: 18, background: "#D7F7C2" }}>✓</span>
               All clear — nothing needs attention.
             </div>
@@ -968,7 +1166,7 @@ function Dashboard({ employees, entries, balance, year }) {
               {alerts.slice(0, 7).map((a, i) => {
                 const st = STATUS[a.level];
                 return (
-                  <div key={i} className="flex items-start gap-2 text-xs">
+                  <div key={`${i}-${run}`} className="lt-a flex items-start gap-2 text-xs" style={anim("lt-rise", T_AFTER + 600 + i * 80, 450)}>
                     <span className="inline-flex items-center justify-center rounded-full font-bold shrink-0"
                       style={{ width: 16, height: 16, background: st.bg, color: st.fg, fontSize: 10, marginTop: 1 }}>{st.icon}</span>
                     <span style={{ color: INK }}>
